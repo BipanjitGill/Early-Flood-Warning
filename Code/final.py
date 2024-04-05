@@ -5,50 +5,69 @@ import os
 from WhatIfAnalysis import GoalSeek
 import numpy as np
 import pandas as pd
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+from datetime import datetime
+import time
+import subprocess
 
-video=opyf.videoAnalyzer('IMG_1139.MOV')
-video.set_vecTime(Ntot=10,starting_frame=100)
+uri = "mongodb+srv://flood:floodsingh@discharge.uwrte40.mongodb.net/?retryWrites=true&w=majority&appName=Discharge"
+client = MongoClient(uri, server_api=ServerApi('1'))
+try:
+    client.admin.command('ping')
+    print("Pinged your deployment. You successfully connected to MongoDB!")
+except Exception as e:
+    print(e)
 
-video.set_interpolationParams(Sharpness=2)
-video.set_goodFeaturesToTrackParams(qualityLevel=0.01)
+db=client.Dischage
+collection=db.outputs
 
-video.set_vlim([0, 20])
-video.extractGoodFeaturesDisplacementsAccumulateAndInterpolate(display1='quiver',display2='field',displayColor=True)
-video.set_filtersParams(maxDevInRadius=1.5, RadiusF=0.15,range_Vx=[0.01,10])
-video.filterAndInterpolate()
-video.writeVelocityField(fileFormat='csv')
+def delete_file(filename):
+    if os.path.exists(filename):
+        os.remove(filename)
+        print(f"{filename} has been deleted.")
+    else:
+        print(f"{filename} does not exist.")
+def record_video(filename, duration_ms=10000, width=1280, height=720):
+    command = f"raspivid -o {filename} -t {duration_ms} -w {width} -h {height}"
+    subprocess.run(command, shell=True)
 
-df = pd.read_csv("frame_100_to_110_with_step_1_and_shift_1.csv")
-df_transformed = df[(df['X']>250) & (df['X']<1500) &(df['Y']==933)]
+# video=opyf.videoAnalyzer('IMG_1139.MOV')
+# video.set_vecTime(Ntot=10,starting_frame=100)
 
-Velocity = df_transformed['Uy_[px.deltaT^{-1}]']
-print(type(Velocity.values))
+# video.set_interpolationParams(Sharpness=2)
+# video.set_goodFeaturesToTrackParams(qualityLevel=0.01)
 
-def generate_D(x):
-    something = np.abs(np.random.normal(0.8,0.5,int((x+1)/2)))
-    something = np.concatenate((np.sort(something),np.sort(something)[::-1]),axis = None)
-    if(len(something)>x):
-        something = something[:-1]
-    return something
+# video.set_vlim([0, 20])
+# video.extractGoodFeaturesDisplacementsAccumulateAndInterpolate(display1='quiver',display2='field',displayColor=True)
+# video.set_filtersParams(maxDevInRadius=1.5, RadiusF=0.15,range_Vx=[0.01,10])
+# video.filterAndInterpolate()
+# video.writeVelocityField(fileFormat='csv')
 
-U_surface = np.absolute(Velocity.values)
-data_len = len(U_surface)
-x = np.linspace(0.1,5,len(U_surface))
-D = np.linspace(0.1,5,len(U_surface))
-# D = generate_D(data_len)
-y = np.linspace(0.1,1,100)
+# df = pd.read_csv("frame_100_to_110_with_step_1_and_shift_1.csv")
+# df_transformed = df[(df['X']>250) & (df['X']<1500) &(df['Y']==933)]
 
-area_of_one_point = 5 / (data_len * 100)
+# print(len(df_transformed))
+# Velocity = df_transformed['Uy_[px.deltaT^{-1}]']
+# print(type(Velocity.values))
 
-print(x[0:5])
-print(area_of_one_point)
-print(D[0:5])
+# U_surface = np.absolute(Velocity.values)
+# data_len = len(U_surface)
+# x = np.linspace(0.1,5,len(U_surface))
+# D = np.linspace(0.1,5,len(U_surface))
+# y = np.linspace(0.1,1,100)
 
-phi_Mobs = np.mean(U_surface) / np.max(U_surface)
-U_max = np.max(U_surface)
-U_mean = np.mean(U_surface)
+# area_of_one_point = 5 / (data_len * 100)
 
-def find_M():
+# print(x[0:5])
+# print(area_of_one_point)
+# print(D[0:5])
+
+# phi_Mobs = np.mean(U_surface) / np.max(U_surface)
+# U_max = np.max(U_surface)
+# U_mean = np.mean(U_surface)
+
+def find_M(U_mean , U_max):
     def fun(x):
         y = np.exp(x) / (np.exp(x)-1)
         y = y - 1/x
@@ -64,13 +83,20 @@ def find_M():
 #     print('M is = ', ans)
     return ans
 
-def implement_flow_chart():
+def implement_flow_chart(U_surface):
+    x = np.linspace(0.1,5,len(U_surface))
+    D = np.linspace(0.1,5,len(U_surface))
+    y = np.linspace(0.1,1,100)
+    phi_Mobs = np.mean(U_surface) / np.max(U_surface)
+    U_max = np.max(U_surface)
+    U_mean = np.mean(U_surface)
+
     p = 1
     a = 0.05
     u_xy = []
     
     delta_dash = a + 1 + 1.3 * np.exp(-x/D)
-    M = find_M()
+    M = find_M(U_mean , U_max)
 
     # h missing in flow-chart
     h = D - D/delta_dash
@@ -109,6 +135,56 @@ def implement_flow_chart():
     return u_xy
 
 
-ans = implement_flow_chart()
-ans = ans * area_of_one_point
-print( np.sum(ans))
+# ans = implement_flow_chart()
+# ans = ans * area_of_one_point
+# dis= np.sum(ans)
+# data = {
+#     "Time": datetime.now() ,
+#     "Value": dis
+# }
+
+# collection.insert_one(data)
+# print( np.sum(ans))
+
+
+
+
+while True:
+    try:
+        # record_video("IMG_1139.MOV", duration_ms=10000, width=1280, height=720)
+    
+        video=opyf.videoAnalyzer('IMG_1139.MOV')
+        video.set_vecTime(Ntot=10,starting_frame=100)
+
+        video.set_interpolationParams(Sharpness=2)
+        video.set_goodFeaturesToTrackParams(qualityLevel=0.01)
+
+        video.set_vlim([0, 20])
+        video.extractGoodFeaturesDisplacementsAccumulateAndInterpolate(display1='quiver',display2='field',displayColor=True)
+        video.set_filtersParams(maxDevInRadius=1.5, RadiusF=0.15,range_Vx=[0.01,10])
+        video.filterAndInterpolate()
+        video.writeVelocityField(fileFormat='csv')
+
+        df = pd.read_csv("frame_100_to_110_with_step_1_and_shift_1.csv")
+        df_transformed = df[(df['X']>250) & (df['X']<1500) &(df['Y']==933)]
+
+        Velocity = df_transformed['Uy_[px.deltaT^{-1}]']
+        # print(type(Velocity.values))
+        U_surface = np.absolute(Velocity.values)
+        ans = implement_flow_chart(U_surface)
+        area_of_one_point = 5 / (len(U_surface) * 100)
+        ans = ans * area_of_one_point
+        # ans = implement_flow_chart()
+        # ans = ans * area_of_one_point
+        dis= np.sum(ans)
+        data = {
+            "Time": datetime.now() ,
+            "Value": dis
+        }
+
+        collection.insert_one(data)
+        print( np.sum(ans))
+        # delete_file("IMG_1139.MOV")
+    except:
+        print("UNABLE TO RECORD VIDEO")
+    time.sleep(15*60)
