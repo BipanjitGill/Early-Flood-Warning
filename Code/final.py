@@ -1,3 +1,7 @@
+import sys
+sys.path.append("opyflow/src/")
+sys.path.append("./")
+import bson
 import opyf
 import matplotlib.pyplot as plt
 import sys
@@ -10,17 +14,48 @@ from pymongo.server_api import ServerApi
 from datetime import datetime
 import time
 import subprocess
+from datetime import datetime
+import base64
+import cv2
 
-uri = "mongodb+srv://flood:floodsingh@discharge.uwrte40.mongodb.net/?retryWrites=true&w=majority&appName=Discharge"
+def capture_photo(video_path, output_path):
+    video_capture = cv2.VideoCapture(video_path)
+    if not video_capture.isOpened():
+        print("Error: Unable to open video file.")
+        return
+    ret, frame = video_capture.read()
+    if not ret:
+        print("Error: Unable to read frame from video.")
+        return
+    cv2.imwrite(output_path, frame)
+    video_capture.release()
+
+    print("Photo captured successfully!")
+
+
+def image_to_base64(image_path):
+    with open(image_path, "rb") as img_file:
+        encoded_string = base64.b64encode(img_file.read())
+        return encoded_string.decode('utf-8')
+uri = "mongodb+srv://dp42:1234@cluster0.fcqtdbe.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 client = MongoClient(uri, server_api=ServerApi('1'))
+
 try:
     client.admin.command('ping')
     print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
     print(e)
 
-db=client.Dischage
+db=client.cluster0
 collection=db.outputs
+
+
+data = {
+    "IMG": "image",
+    "VEL": 2.2,
+    "TIME": datetime.now() 
+}
+#     collection.insert_one(data)
 
 def delete_file(filename):
     if os.path.exists(filename):
@@ -29,58 +64,21 @@ def delete_file(filename):
     else:
         print(f"{filename} does not exist.")
 def record_video(filename, duration_ms=10000, width=1280, height=720):
-    command = f"raspivid -o {filename} -t {duration_ms} -w {width} -h {height}"
-    subprocess.run(command, shell=True)
+    subprocess.run("rpicam-vid -t 5000 -o test.h264", shell=True)
+    time.sleep(1)
+    subprocess.run("ffmpeg -r 30 -i test.h264 -c:v copy output.mp4", shell=True)
+	
 
-# video=opyf.videoAnalyzer('IMG_1139.MOV')
-# video.set_vecTime(Ntot=10,starting_frame=100)
-
-# video.set_interpolationParams(Sharpness=2)
-# video.set_goodFeaturesToTrackParams(qualityLevel=0.01)
-
-# video.set_vlim([0, 20])
-# video.extractGoodFeaturesDisplacementsAccumulateAndInterpolate(display1='quiver',display2='field',displayColor=True)
-# video.set_filtersParams(maxDevInRadius=1.5, RadiusF=0.15,range_Vx=[0.01,10])
-# video.filterAndInterpolate()
-# video.writeVelocityField(fileFormat='csv')
-
-# df = pd.read_csv("frame_100_to_110_with_step_1_and_shift_1.csv")
-# df_transformed = df[(df['X']>250) & (df['X']<1500) &(df['Y']==933)]
-
-# print(len(df_transformed))
-# Velocity = df_transformed['Uy_[px.deltaT^{-1}]']
-# print(type(Velocity.values))
-
-# U_surface = np.absolute(Velocity.values)
-# data_len = len(U_surface)
-# x = np.linspace(0.1,5,len(U_surface))
-# D = np.linspace(0.1,5,len(U_surface))
-# y = np.linspace(0.1,1,100)
-
-# area_of_one_point = 5 / (data_len * 100)
-
-# print(x[0:5])
-# print(area_of_one_point)
-# print(D[0:5])
-
-# phi_Mobs = np.mean(U_surface) / np.max(U_surface)
-# U_max = np.max(U_surface)
-# U_mean = np.mean(U_surface)
 
 def find_M(U_mean , U_max):
     def fun(x):
         y = np.exp(x) / (np.exp(x)-1)
         y = y - 1/x
         return y
-
     goal=U_mean / U_max
-
-    # (iii) Define a starting point
     x0=0.001
 
-    ## Here is the result
     ans = GoalSeek(fun,goal,x0)
-#     print('M is = ', ans)
     return ans
 
 def implement_flow_chart(U_surface):
@@ -98,7 +96,6 @@ def implement_flow_chart(U_surface):
     delta_dash = a + 1 + 1.3 * np.exp(-x/D)
     M = find_M(U_mean , U_max)
 
-    # h missing in flow-chart
     h = D - D/delta_dash
 
     u_maxv = U_surface / (1/M * np.log(1 + (np.exp(M)-1)* delta_dash * np.exp(1-delta_dash)))
@@ -117,7 +114,6 @@ def implement_flow_chart(U_surface):
         delta_dash = a + 1 + 1.3 * np.exp(-x/D)
         M = find_M()
 
-        # h missing in flow-chart
         h = D - D/delta_dash
 
         u_maxv = U_surface / (1/M * np.log(1 + (np.exp(M)-1)* delta_dash * np.exp(1-delta_dash)))
@@ -135,56 +131,29 @@ def implement_flow_chart(U_surface):
     return u_xy
 
 
-# ans = implement_flow_chart()
-# ans = ans * area_of_one_point
-# dis= np.sum(ans)
-# data = {
-#     "Time": datetime.now() ,
-#     "Value": dis
-# }
+record_video("output.MOV", duration_ms=10000, width=1280, height=720)
 
-# collection.insert_one(data)
-# print( np.sum(ans))
+video=opyf.videoAnalyzer("output.mp4")
+video.set_vecTime(Ntot=5,starting_frame=10)
 
+video.set_interpolationParams(Sharpness=2)
+video.set_goodFeaturesToTrackParams(qualityLevel=0.01)
 
+video.set_vlim([0, 20])
+video.extractGoodFeaturesDisplacementsAccumulateAndInterpolate(display1='quiver',display2='field',displayColor=True)
+video.set_filtersParams(maxDevInRadius=1.5, RadiusF=0.15,range_Vx=[0.01,10])
+video.filterAndInterpolate()
+video.writeVelocityField(fileFormat='csv')
 
+df = pd.read_csv(video.filename+".csv")
+df_transformed = df[(df['X']>50) & (df['X']<500) &(df['Y']==433)]
 
-while True:
-    try:
-        # record_video("IMG_1139.MOV", duration_ms=10000, width=1280, height=720)
-    
-        video=opyf.videoAnalyzer('IMG_1139.MOV')
-        video.set_vecTime(Ntot=10,starting_frame=100)
+Velocity = df_transformed['Uy_[px.deltaT^{-1}]']
+U_surface = np.absolute(Velocity.values)
+ans = implement_flow_chart(U_surface)
+area_of_one_point = 5 / (len(U_surface) * 100)
+ans = ans * area_of_one_point
+# capture_photo("output.mp4","output.jpg")
 
-        video.set_interpolationParams(Sharpness=2)
-        video.set_goodFeaturesToTrackParams(qualityLevel=0.01)
-
-        video.set_vlim([0, 20])
-        video.extractGoodFeaturesDisplacementsAccumulateAndInterpolate(display1='quiver',display2='field',displayColor=True)
-        video.set_filtersParams(maxDevInRadius=1.5, RadiusF=0.15,range_Vx=[0.01,10])
-        video.filterAndInterpolate()
-        video.writeVelocityField(fileFormat='csv')
-
-        df = pd.read_csv("frame_100_to_110_with_step_1_and_shift_1.csv")
-        df_transformed = df[(df['X']>250) & (df['X']<1500) &(df['Y']==933)]
-
-        Velocity = df_transformed['Uy_[px.deltaT^{-1}]']
-        # print(type(Velocity.values))
-        U_surface = np.absolute(Velocity.values)
-        ans = implement_flow_chart(U_surface)
-        area_of_one_point = 5 / (len(U_surface) * 100)
-        ans = ans * area_of_one_point
-        # ans = implement_flow_chart()
-        # ans = ans * area_of_one_point
-        dis= np.sum(ans)
-        data = {
-            "Time": datetime.now() ,
-            "Value": dis
-        }
-
-        collection.insert_one(data)
-        print( np.sum(ans))
-        # delete_file("IMG_1139.MOV")
-    except:
-        print("UNABLE TO RECORD VIDEO")
-    time.sleep(15*60)
+print( np.sum(ans))
+        
